@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vancouver R3 site feasibility</title>
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css?v=mudbiv7l">
+<link rel="stylesheet" href="app.css?v=mudbiv7l">
+<link rel="stylesheet" href="explore.css?v=mudbiv7l">
+<link rel="stylesheet" href="sheet.css?v=mudbiv7l">
+<link rel="stylesheet" href="help.css?v=mudbiv7l">
+</head>
+<body>
+<header id="verdict" class="verdict empty">
+  <div class="v-addr"><span id="v-addr">No site selected</span><span id="v-zone" class="zone"></span></div>
+  <div class="v-figs">
+    <div class="fig"><span id="f-area" class="num">—</span><span class="lbl">site area m²</span></div>
+    <div class="fig"><span id="f-front" class="num">—</span><span class="lbl">frontage m</span></div>
+    <div class="fig"><span id="f-depth" class="num">—</span><span class="lbl">depth m</span></div>
+  </div>
+  <div id="v-flag" class="v-flag"></div>
+</header>
+
+<nav class="bar" aria-label="Stages and scheme">
+  <div class="tabs" role="tablist" aria-label="Stages">
+    <button class="tab on" role="tab" aria-selected="true" aria-controls="site-tab" data-tab="site">Site</button>
+    <button class="tab" role="tab" aria-selected="false" aria-controls="reference-tab" data-tab="capacity" disabled><b class="tab-n">1</b>Massing</button>
+    <button class="tab" role="tab" aria-selected="false" aria-controls="units-tab" data-tab="massing" disabled><b class="tab-n">2</b>Plan setup</button>
+    <button class="tab" role="tab" aria-selected="false" aria-controls="units-tab" data-tab="corridor" disabled hidden>Corridor by hand</button>
+    <button class="tab" role="tab" aria-selected="false" aria-controls="units-tab" data-tab="units" disabled><b class="tab-n">3</b>Units</button>
+    <button class="tab" role="tab" aria-selected="false" aria-controls="eg-tab" data-tab="egress" disabled><b class="tab-n">4</b>Review</button>
+    <button class="tab" role="tab" aria-selected="false" aria-controls="units-tab" data-tab="presentation" disabled><b class="tab-n">5</b>Presentation</button>
+  </div>
+  <button class="ws-return" id="ws-return" type="button" hidden title="Back to the design workspace (F)">Open workspace</button>
+  <div class="scheme ctx" role="radiogroup" aria-label="Egress scheme" hidden>
+    <span class="scheme-lbl">Scheme</span>
+    <button class="seg on" role="radio" aria-checked="true" data-scheme="two">Two exits</button>
+    <button class="seg" role="radio" aria-checked="false" data-scheme="scissor">Scissor</button>
+    <button class="seg" role="radio" aria-checked="false" data-scheme="one">One exit</button>
+  </div>
+  <label class="cmp-ctl ctx" hidden>Compare <select id="compare"><option value="off">off</option><option value="two">with two exits</option><option value="scissor">with scissor</option><option value="one">with one exit</option><option value="regime">with the other regime</option></select></label>
+  <button id="print" class="btn small ctx" hidden>Print sheet</button>
+</nav>
+
+<main class="stage" id="stage">
+  <section id="left" class="left">
+    <div id="map-wrap" class="map-wrap">
+      <div class="map-tools">
+        <input id="search" type="search" placeholder="Search an R3 address" autocomplete="off" aria-label="Search address">
+        <ul id="results" class="results" hidden></ul>
+        <select id="basemap" aria-label="Base map">
+          <option value="esri-gray" selected>Light grey (Esri)</option>
+          <option value="figure">Figure-ground</option>
+          <option value="esri-street">Street (Esri)</option>
+          <option value="esri-topo">Topographic (Esri)</option>
+          <option value="esri-imagery">Imagery (Esri)</option>
+          <option value="none">No base map</option>
+        </select>
+      </div>
+      <div id="map" class="map" role="application" aria-label="Parcel map"></div>
+      <button id="map-expand" class="map-expand" hidden>Map</button>
+      <div class="legend">
+        <span class="sw r31"></span>R3-1 <span class="sw r32"></span>R3-2 <span class="sw r33"></span>R3-3
+        <span class="sw sel"></span>selected <span class="sw adj"></span>can combine <label class="lg-ctl"><input type="checkbox" id="show-toa" checked> 800 m TOA</label>
+        <span class="hint">Click a parcel. Shift-click to add a neighbour.</span>
+      </div>
+    </div>
+    <div id="dwg" class="dwg-area" hidden></div>
+    <div id="u-stage" class="u-stage" hidden></div>
+    <div id="delta" class="delta" hidden></div>
+    <footer id="rev-strip" class="rev-strip" hidden aria-live="polite"><span class="rev-head">REVISIONS</span><ol id="rev-list"></ol></footer>
+  </section>
+
+  <aside id="panel" class="panel">
+    <div id="site-empty" class="empty-state">
+      <h2>From capacity to possibility.</h2><p>Select a parcel or assembly, then explore courtyards, galleries, unit mix and exit arrangements with live FSR feedback.</p><button id="open-example" class="btn">Open an example site</button>
+      <p class="muted"><span id="count-r3">—</span> R3 parcels loaded from City of Vancouver open data. Colour shows sub-district.</p>
+    </div>
+
+    <div id="site-tab" class="tabpane"><div id="site-body" hidden>
+      <h2 class="h-site"><span id="s-addr"></span></h2>
+      <p id="s-kind" class="site-kind"></p>
+      <div id="s-fsr" class="fsr-hero" hidden></div>
+      <div id="s-verdict" class="callout"></div>
+      <dl class="kv kv-figs">
+        <div><dt>Site area</dt><dd><span id="s-area" class="num"></span> m² <button class="why" type="button" data-why="area" data-help="site-area" title="What site area means" aria-label="Explain site area">§</button></dd></div>
+        <div><dt>Frontage</dt><dd><input id="s-front" class="num edit" type="number" step="0.01" inputmode="decimal"> m <span id="s-front-src" class="src"></span> <button class="why" type="button" data-why="frontage" data-help="frontage" title="What frontage means" aria-label="Explain frontage">§</button></dd></div>
+        <div><dt>Depth</dt><dd><input id="s-depth" class="num edit" type="number" step="0.01" inputmode="decimal"> m <span id="s-depth-src" class="src"></span> <button class="why" type="button" data-why="depth" data-help="depth" title="What depth means" aria-label="Explain depth">§</button></dd></div>
+        <div><dt>Transit-oriented area</dt><dd id="s-toa"></dd></div>
+      </dl>
+      <section id="assembly" class="assembly"><h3>Assemblies</h3><p id="asm-hint" class="asm-hint" role="note" hidden></p><p id="asm-note" class="muted"></p><ul id="asm-list" class="asm-list"></ul></section>
+      <details class="site-more"><summary>Site details</summary>
+      <dl class="kv">
+        <div><dt>Block position</dt><dd id="s-corner"></dd></div>
+        <div><dt>Lane</dt><dd id="s-lane"></dd></div>
+        <div><dt>Street orientation</dt><dd><span id="s-orient"></span></dd></div>
+        <div><dt>Shape</dt><dd id="s-shape"></dd></div>
+      </dl>
+      <div id="s-flags" class="flags"></div>
+      <details id="why-box" class="why-box"><summary>Derivation method</summary><div id="why-text"></div></details>
+      <details class="edges-box"><summary>Boundary edges</summary>
+        <table class="edges"><thead><tr><th>Side</th><th>Length m</th><th>Gap to facing parcel m</th></tr></thead><tbody id="s-edges"></tbody></table>
+        <p class="muted">Gap &lt; 0.5 m: shared boundary. 0.5–10.1 m: lane. ≥ 10.1 m: street (ZDB §2 threshold). No parcel within 80 m: open — park, water or unknown.</p>
+      </details>
+      </details>
+      <section id="combined" class="combined" hidden><h3>Combined site</h3><p class="warn-text">Not a legal site until consolidated. Constituents:</p><ul id="c-parts"></ul><button id="c-clear" class="btn">Back to single parcel</button></section>
+      <div class="site-next"><p id="s-next-note" class="site-next-note" aria-live="polite"></p><button id="s-next" class="ex-primary ws-go" type="button">Continue to maximum massing →</button></div>
+    </div></div>
+
+    <div id="reference-tab" class="tabpane" hidden></div>
+    <div id="cap-tab" class="tabpane" hidden>
+      <div id="cap-empty" class="empty-state"><p>Capacity needs a site that meets the 460 m² minimum.</p></div>
+      <div id="cap-body" hidden>
+        <div id="cap-conclusion" class="callout"></div>
+        <div id="cap-gauges" class="gauges">
+          <div id="g-fsr" class="gauge"><div class="g-head"><span>Density</span><span class="g-val"></span></div><div class="track"><div class="gfill"></div></div></div>
+          <div id="g-height" class="gauge"><div class="g-head"><span>Height</span><span class="g-val"></span></div><div class="track"><div class="gfill"></div></div></div>
+          <div id="g-units" class="gauge"><div class="g-head"><span>Units</span><span class="g-val"></span></div><div class="track"><div class="gfill"></div></div></div>
+        </div>
+        <details open class="grp"><summary>Regime, tenure and triggers</summary>
+          <div class="ingrid">
+            <label>Current rules <select id="i-regime"><option value="now">Current encoded rules</option></select></label>
+            <label>Tenure <select id="i-tenure"><option value="rental">100% rental</option><option value="other">Strata / other</option></select></label>
+            <div class="toa-row"><span id="i-toa-state" class="toa-state"></span>
+              <label>Transit-oriented area <select id="i-toa"><option value="auto">derived from station distance</option><option value="yes">force: in a TOA</option><option value="no">force: not in a TOA</option></select></label>
+              <p id="i-toa-why" class="muted note"></p></div>
+            <label class="chk"><input type="checkbox" id="i-bmr"> 20% below-market rental (needs TOA)</label>
+            <label class="chk"><input type="checkbox" id="i-social"> 100% social housing</label>
+          </div>
+        </details>
+        <details class="grp"><summary>Building</summary>
+          <div class="ingrid">
+            <label class="chk"><input type="checkbox" id="i-comm"> Commercial ground floor (mixed-use)</label>
+            <label>Residential floor-to-floor <span><input type="number" id="i-ftfres" step="0.1"> m</span></label>
+            <label>Commercial floor-to-floor <span><input type="number" id="i-ftfcomm" step="0.1"> m</span></label>
+            <label>Roof assembly allowance <span><input type="number" id="i-roof" step="0.1"> m</span></label>
+            <label>Storey cap (0 = none) <span><input type="number" id="i-cap" step="1"> </span></label>
+            <label>Egress strategy <select id="i-egress"><option value="two">Two exits — interior corridor</option><option value="scissor">Two exits — scissor stair</option><option value="one">One exit — exterior stair + passageway</option></select></label>
+            <p id="i-egress-note" class="muted note"></p>
+            <label>Core + corridor loss <span><input type="number" id="i-core" step="1"> %</span></label>
+            <label>Balconies, of residential gross <span><input type="number" id="i-bal" step="1"> %</span></label>
+            <p id="i-bal-note" class="muted note"></p>
+            <label class="chk"><input type="checkbox" id="i-wall"> Exterior wall thickness exclusion <span class="src" style="color:var(--ink-3)">ZDB §10.15.1: 1% at 4–6 storeys with ≥100 mm insulation, 2% at ≤3 storeys with ≥175 mm</span></label>
+            <label>Common amenity <span><input type="number" id="i-am" step="1"> %</span></label>
+            <label>Bike storage + mechanical <span><input type="number" id="i-bm" step="1"> %</span></label>
+          </div>
+        </details>
+        <details class="grp"><summary>Unit mix</summary>
+          <table class="mix"><thead><tr><th>Type</th><th>Net size</th><th>Share of units</th></tr></thead><tbody id="i-mix"></tbody></table>
+          <p id="i-mix-sum" class="muted"></p>
+        </details>
+        <details class="grp"><summary>Parking</summary>
+          <div class="ingrid">
+            <label>Mode <select id="i-park"><option value="none">None</option><option value="below">Below base surface</option><option value="grade">At grade, within the building</option></select></label>
+            <label>Stall count <span><input type="number" id="i-stalls" step="1" placeholder="NOT IN SOURCE"> </span></label>
+            <label>Gross area per stall incl. aisle <span><input type="number" id="i-stallarea" step="1"> m²</span></label>
+            <p class="muted note">Parking never consumes FSR from 27 Oct (§10.41.3(d)(i), ≤ 7.3 m per space); today only at or below base surface is excluded (§4.1.2(e)(i)). At grade it consumes footprint either way. Required stall count: Parking By-law NOT IN SOURCE.</p>
+          </div>
+        </details>
+        <h3 class="h3">Arithmetic</h3>
+        <table class="steps"><thead><tr><th>Step</th><th>Calculation</th><th class="num">Result</th><th>Source</th></tr></thead><tbody id="cap-steps"></tbody></table>
+        <ul id="cap-warn" class="warns"></ul>
+        <h3 class="h3">Other tenure</h3><div id="cap-tenure"></div>
+        <h3 class="h3">Other regime</h3><div id="cap-regime"></div>
+        <details class="grp"><summary>Pro forma fields (left blank)</summary>
+          <div class="ingrid"><label>Cost per sf <span><input type="text" id="i-cost" placeholder="—"></span></label><label>Revenue per sf <span><input type="text" id="i-rev" placeholder="—"></span></label></div>
+          <p class="muted note">Not populated by the tool.</p>
+        </details>
+      </div>
+    </div>
+
+    <div id="mass-tab" class="tabpane" hidden>
+      <div id="mv-conclusion" class="callout"></div>
+      <p id="mv-note" class="muted note"></p>
+      <div class="ingrid fitbox">
+        <label>When density binds, fit the mass by <select id="mv-fit"><option value="depth">pulling the rear face forward</option><option value="storeys">dropping storeys (partial top plate)</option><option value="none">not fitting — show the excess</option></select></label>
+        <label>Minimum bar depth before dropping storeys <span><input type="number" id="mv-mindepth" step="0.5" value="12"> m</span></label>
+        <p class="muted note">Dashed lines show the setback-and-height envelope; the solid mass is what the permitted floor area buys. Minimum bar depth is a TIP.</p>
+      </div>
+      <h3 class="h3">Design moves</h3>
+      <ul id="mv-list" class="mv-list"></ul>
+      <h3 class="h3">Running total</h3>
+      <table class="steps"><tbody id="mv-table"></tbody></table>
+      <p class="muted note">Envelope: each boundary edge clipped inward by its own yard. Half-plane clipping is exact on convex lots; on concave lots the generator checks itself against a rectangular reading and withholds the massing if it over-constrains.</p>
+    </div>
+
+    <div id="units-tab" class="tabpane" hidden>
+      <div id="u-schedule" class="u-schedule"></div>
+      <div id="u-status" class="callout"></div>
+      <div id="u-inputs"></div>
+      <h3 class="h3">Unit matrix</h3>
+      <div id="u-matrix"></div>
+      <div id="u-list"></div>
+      <div id="u-alts"></div>
+      <div id="u-fails"></div>
+    </div>
+    <div id="eg-tab" class="tabpane" hidden>
+      <div id="eg-verdict" class="callout"></div>
+      <h3 class="h3">Eligibility</h3>
+      <table class="tests"><tbody id="eg-tests"></tbody></table>
+      <p class="muted note">VBBL 3.2.10 provisions enacted by By-law 14576 (in force 3 Feb 2026). The enacted body text is NOT IN SOURCE; tests follow the RTS 17862 Appendix A draft. "Not testable" is a legitimate result at this stage.</p>
+      <h3 class="h3">Like-for-like: lot, envelope, storeys and floor-to-floor held constant</h3>
+      <div id="eg-numbers"></div>
+      <ul id="eg-notes" class="warns"></ul>
+      <details class="grp"><summary>Design parameters and assumptions</summary><div id="eg-params" class="ingrid"></div></details>
+    </div>
+
+    <footer class="prov"><details><summary>Data provenance</summary><div id="prov-text"></div></details></footer>
+  </aside>
+</main>
+
+<section id="sheet" class="sheet" hidden></section>
+
+<script>
+// Scripts are stamped with the load time so a plain reload never runs stale code from a cached page.
+(function(){var v=Date.now(),list=["vendor/leaflet/leaflet.js","vendor/three/three.min.js","vendor/three/OrbitControls.js","data/zoning.js","data/r3_parcels.js","data/r3_assemblies.js","data/context.js","geo.js","rules.js","draw.js","envelope.js","site.js","map.js","stage3.js","stage4.js","view3d.js","stage5.js","explore.js","floor-design.js","core-layout.js","corridor-network.js","poly-pack.js","explore-draw.js","site-services.js","site-context.js","workspace-view.js","corridor-graph.js","workspace-shell.js","interface-motion.js","reference.js","summary-sheet.js","review.js","presentation-detail.js","presentation-drawing.js","presentation.js","export-study.js","plan-setup.js","plan-wait.js","drawing-motion.js","units_ui.js","app.js","help.js","data/intro-example.js","intro.js"];list.forEach(function(src){var s=document.createElement("script");s.src=src+"?v="+v;s.async=false;document.body.appendChild(s);});})();
+</script>
+</body>
+</html>

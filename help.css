@@ -1,0 +1,61 @@
+/* help.css: the Help & glossary sheet (help.js) and the example's progress note (intro.js). A side sheet on the drawing
+   table: white, framed by an ink rule, no shadow, square corners. */
+.hp{position:fixed;inset:0;z-index:2000}
+.hp[hidden]{display:none}
+.hp-scrim{position:absolute;inset:0;background:transparent}
+.hp-sheet{position:absolute;top:0;right:0;bottom:0;width:min(460px,100vw);display:flex;flex-direction:column;background:var(--panel,#fff);border-left:1px solid var(--ink,#111417);color:var(--ink,#111417);font:var(--t-13,13px)/1.5 var(--font,system-ui,sans-serif);outline:none}
+.hp-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 18px;border-bottom:1px solid var(--ink,#111417)}
+.hp-head h2{margin:0;font-size:var(--t-16,16px);font-weight:600;letter-spacing:-.01em}
+.hp-body{flex:1 1 auto;min-height:0;overflow:auto;padding:0 18px 24px;overscroll-behavior:contain}
+.hp-body h3{margin:0;padding:16px 0 8px;font-size:var(--t-12,12px);font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2,#3d434b);border-bottom:1px solid var(--rule,#c9ccd0)}
+.hp-find{display:flex;flex-direction:column;gap:4px;padding:14px 0 4px;font-size:var(--t-12,12px);font-weight:500;color:var(--ink-2,#3d434b)}
+.hp-find input{font:var(--t-13,13px)/1.4 var(--font,system-ui,sans-serif);color:var(--ink,#111417);padding:6px 8px;border:1px solid var(--line,#8b9097);border-radius:2px;background:var(--panel,#fff);max-width:100%;box-sizing:border-box}
+.hp-find input:focus-visible,.hp-sheet button:focus-visible,.hp-sheet summary:focus-visible{outline:2px solid var(--accent,#1a56db);outline-offset:1px}
+.hp-site>div{padding:10px 0 2px}
+.hp-site p{margin:0 0 6px}
+.hp-num{font-family:var(--mono,ui-monospace,monospace);font-weight:500}
+.hp-sub{color:var(--ink-2,#3d434b)}
+.hp-how ol{list-style:none;margin:0;padding:0}
+.hp-how li{display:grid;grid-template-columns:112px minmax(0,1fr);gap:10px;padding:8px 0;border-bottom:1px solid var(--rule-2,#e4e6e9)}
+.hp-how li b{font-weight:600}
+.hp-how li span{color:var(--ink-2,#3d434b)}
+.hp-terms{margin:0}
+.hp-term{padding:10px 0 10px;border-bottom:1px solid var(--rule-2,#e4e6e9);scroll-margin-top:12px}
+.hp-term[hidden]{display:none}
+.hp-term.on{border-left:2px solid var(--accent,#1a56db);margin-left:-12px;padding-left:10px}
+.hp-term dt{font-weight:600;margin:0 0 2px}
+.hp-term dd{margin:0;color:var(--ink-2,#3d434b)}
+.hp-term details{margin-top:6px}
+.hp-term summary{cursor:pointer;font-size:var(--t-12,12px);font-weight:500;color:var(--ink,#111417)}
+.hp-pre{white-space:pre-line;margin:6px 0 0;font-size:var(--t-12,12px);color:var(--ink-2,#3d434b)}
+.hp-none{margin:10px 0;color:var(--ink-2,#3d434b)}
+.hp-note{margin:16px 0 0;font-size:var(--t-12,12px);color:var(--ink-3,#6a7079)}
+.bar .help-open{margin-left:8px}
+@media (max-width:560px){.hp-sheet{border-left:0}.hp-head{padding:10px 16px}.hp-body{padding:0 16px 20px}.hp-how li{grid-template-columns:1fr;gap:2px}}
+/* the example's progress note: a status line above the workspace's busy overlay, never blocking it */
+.intro-progress{position:fixed;left:16px;bottom:16px;z-index:1600;max-width:calc(100vw - 32px);box-sizing:border-box;padding:10px 14px;background:var(--panel,#fff);border:1px solid var(--ink,#111417);font:var(--t-13,13px)/1.45 var(--font,system-ui,sans-serif);color:var(--ink,#111417);pointer-events:none}
+.intro-progress small{display:block;color:var(--ink-2,#3d434b);font-size:var(--t-12,12px)}
+/* the welcome fly-in hides the title block until it lands (app.css); the way out stays visible and focusable from the first frame */
+.intro.welcoming .intro-block>.intro-actions,.intro.welcoming .intro-sheet>.intro-skip{opacity:1;transform:none}
+
+/* Welcome: once the city fly-in stops, the sheet rests and a large Play sits in the middle of the drawing, so the
+   next step is obvious; it fades out the moment the demo runs (the timeline's own Play stays for pause and replay) */
+.intro-hero{position:absolute;left:50%;top:46%;z-index:3;display:grid;grid-template-columns:auto auto;grid-template-rows:auto auto;column-gap:14px;align-items:center;padding:16px 26px 16px 20px;background:var(--ink);border:1px solid var(--ink);border-radius:2px;color:#fff;box-shadow:0 0 0 8px rgba(255,255,255,.85);font:inherit;text-align:left;cursor:pointer;opacity:0;visibility:hidden;transform:translate(-50%,-50%) translateY(8px);transition:opacity .35s ease,transform .35s ease,visibility 0s .35s,background-color .2s,color .2s}
+.intro.resting .intro-hero{opacity:1;visibility:visible;transform:translate(-50%,-50%);transition:opacity .45s ease .15s,transform .45s ease .15s,visibility 0s,background-color .2s,color .2s}
+.intro-hero i{grid-row:1/3;width:0;height:0;border-style:solid;border-width:11px 0 11px 18px;border-color:transparent transparent transparent currentColor}
+.intro-hero b{font-size:17px;font-weight:600;line-height:1.2}
+.intro-hero span{font-size:13px;color:#d8dbe0}
+.intro-hero:hover{background:#2a2f36}
+.intro-hero:focus-visible{outline:2px solid var(--accent,#1a56db);outline-offset:3px}
+@media (prefers-reduced-motion:reduce){.intro-hero,.intro.resting .intro-hero{transition:none}}
+.intro-pinned .intro-hero,.intro-pinned.resting .intro-hero{transition:none}
+/* After the demo: what next, in the middle of the finished sheet */
+.intro-end{position:absolute;left:50%;top:46%;z-index:3;display:grid;gap:12px;justify-items:center;padding:18px 22px;background:var(--panel,#fff);border:1px solid var(--ink);border-radius:2px;box-shadow:0 0 0 8px rgba(255,255,255,.85);opacity:0;visibility:hidden;transform:translate(-50%,-50%) translateY(8px);transition:opacity .35s ease,transform .35s ease,visibility 0s .35s}
+.intro.finished .intro-end{opacity:1;visibility:visible;transform:translate(-50%,-50%);transition:opacity .45s ease .2s,transform .45s ease .2s,visibility 0s}
+.intro-end p{margin:0;font-size:17px;font-weight:600;color:var(--ink)}
+.intro-end div{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.intro-end .btn{min-height:36px;padding:0 16px;font-size:13px}
+@media (prefers-reduced-motion:reduce){.intro-end,.intro.finished .intro-end{transition:none}}
+.intro-end{width:max-content;max-width:calc(100% - 32px)}.intro-end div{flex-wrap:nowrap}@media (max-width:560px){.intro-end div{flex-wrap:wrap}}
+.hp-legal p{margin:0 0 6px;font-size:12px;line-height:1.5;color:var(--ink-2)}
+.intro-legal{margin-top:4px;font-size:11px;color:var(--ink-3)}

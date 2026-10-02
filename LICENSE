@@ -1,0 +1,23 @@
+Copyright (c) 2026 Yeoneui Kim. All rights reserved.
+
+This software, its source code, documentation and design (the "Software") are the
+property of Yeoneui Kim.
+
+You may use the hosted version of the tool, through its published web address, to
+study sites for your own purposes. No other right is granted. Without prior written
+permission from the copyright holder, you may not copy, modify, distribute, publish,
+sublicense, sell, host or create derivative works of the Software or any part of it.
+
+Third-party components bundled with the Software (map, 3D and font libraries, and
+City of Vancouver open data) are not covered by this licence. They remain under their
+own licences, listed in THIRD-PARTY-NOTICES.md.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE
+LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR ITS USE.
+
+The Software produces schematic studies. Its results are not a zoning or building code
+determination, a permit review, or professional advice. Verify every result with the
+City of Vancouver and qualified professionals before relying on it.
