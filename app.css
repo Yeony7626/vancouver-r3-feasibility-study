@@ -492,3 +492,34 @@ html.intro-on,body.intro-on{overflow:hidden;max-width:100vw}
 .kv-figs>div:last-child dd{white-space:normal;display:block;font-size:12px;color:var(--ink-2)}
 .kv-figs>div:last-child dt{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 #s-verdict.callout.pass{padding:6px 10px;font-size:13px}#s-verdict.callout.pass .sub{display:none}
+
+/* ---- Accessibility audit, 1 Oct 2026 ---- */
+/* tap targets: the § explainers, the TOA toggle and the combine link are at least 24 px to hit */
+.why{min-width:24px;min-height:24px;display:inline-flex;align-items:center;justify-content:center}
+.lg-ctl{display:inline-flex;align-items:center;gap:6px;min-height:24px;cursor:pointer}
+.lg-ctl input{width:16px;height:16px;margin:0}
+.fsr-combine{min-height:24px;display:inline-flex;align-items:center}
+/* the next-step cue on a tab is a dotted underline, so it never reads as a second active tab */
+.tab.tab-cue::after{background:none;border-bottom:2px dotted var(--accent);height:0}
+@media (max-width:860px){
+  /* phones: nothing under 12 px */
+  :root{--t-11:12px}
+  .kv-figs dt,.legend,.pw-cap,.pw-eyebrow,.pw-best dt,.intro-legal,.toa-name,.leaflet-control-attribution{font-size:12px!important}
+  .why{min-width:32px;min-height:32px}.lg-ctl input{width:20px;height:20px}
+  /* the welcome on a phone: what this is and what to do first, then the drawing and the demo */
+  .intro-sheet{display:flex;flex-direction:column;overflow:auto}
+  .intro-block{order:-1;border-top:0;border-bottom:1px solid var(--ink);padding:24px 18px 20px;gap:14px}
+  .intro-block>h1{order:0}.intro-block>.intro-lead{order:1}.intro-block>.intro-actions{order:2}.intro-block>.intro-steps{order:3}.intro-block>.intro-note,.intro-block>.intro-legal{order:4}
+  .intro-actions .btn{min-height:44px;padding:0 18px;font-size:15px}
+  .intro-draw{min-height:340px;height:52vh;flex:none}
+  .intro-hero{padding:10px 16px 10px 14px;column-gap:10px;box-shadow:0 0 0 6px rgba(255,255,255,.85)}
+  .intro-hero b{font-size:15px;white-space:nowrap}.intro-hero span{display:none}
+  .intro-hero i{border-width:8px 0 8px 13px}
+  .intro-end{padding:14px 16px}.intro-end p{font-size:15px}
+  /* the demo steps: a 28 px target around each 12 px mark */
+  .il-tick{padding:8px;top:-17px}
+}
+@media (max-width:860px){.intro-block{padding-top:48px}.intro-skip{min-height:32px;padding:6px 8px}}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+@media (max-width:860px){.intro-note,.asm-list .n small,.v-flag,.intro-read b+span{font-size:12px!important}}
+@media (max-width:860px){.intro-sheet>*{flex-shrink:0}.intro-block{flex:none;overflow:visible;min-height:auto}.intro-sheet{overflow-y:auto;-webkit-overflow-scrolling:touch}}

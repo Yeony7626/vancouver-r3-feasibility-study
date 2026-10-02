@@ -134,9 +134,9 @@
         <button class="intro-hero" type="button"><i aria-hidden="true"></i><b>Play the demo</b><span>See how it works in under 10 seconds</span></button>
         <div class="intro-end" role="group" aria-label="What next"><p>Ready to try it on a real lot?</p><div><button class="btn intro-go" type="button" data-end="pick">Pick a site</button><button class="btn" type="button" data-end="example">Open the example</button><button class="btn" type="button" data-end="replay">Replay</button></div></div>
         <div class="intro-stamp" aria-hidden="true"><b>${esc(x.verdict)}</b><span>${x.count} homes · ${x.floors} storeys · FSR ${fmt(x.achieved)} of ${fmt(x.permitted)}</span></div>
-        <div class="intro-line"><button class="il-play" type="button"><i aria-hidden="true"></i><span>Play the demo</span></button><div class="il-rule" role="slider" tabindex="0" aria-label="Intro timeline" aria-valuemin="1" aria-valuemax="5" aria-valuenow="1"><span class="il-fill"></span>${COPY.map((c, i) => `<button class="il-tick" type="button" data-beat="${i}" style="left:${i / (STEPS - 1) * 100}%"><i></i><span>${esc(c[0])}</span></button>`).join('')}</div></div>
+        <div class="intro-line"><button class="il-play" type="button"><i aria-hidden="true"></i><span>Play the demo</span></button><div class="il-rule" role="group" aria-label="Demo steps"><span class="il-fill"></span>${COPY.map((c, i) => `<button class="il-tick" type="button" data-beat="${i}" aria-label="Step ${i + 1}: ${esc(c[0])}" style="left:${i / (STEPS - 1) * 100}%"><i></i><span>${esc(c[0])}</span></button>`).join('')}</div></div>
       </div>
-      <aside class="intro-block">
+      <aside class="intro-block" aria-label="Welcome">
         <h1 id="intro-title">Welcome to R3 site feasibility</h1>
         <p class="intro-lead">From a City of Vancouver parcel to a coordinated schematic plan, with the R3 rules and the code checks drawn in.</p>
         <ol class="intro-steps">${COPY.map((c, i) => `<li><button type="button" data-beat="${i}" aria-current="false"><em>${i + 1}</em><b>${esc(c[0])}</b><span>${esc(c[1])}</span></button></li>`).join('')}</ol>
@@ -156,7 +156,7 @@
     const set = v => { t = Math.max(-WELCOME, Math.min(STEPS, v)); const e = t + WELCOME, w = t < 0 ? (e < PAUSE_AT * PACE ? e / PACE : e < PAUSE_AT * PACE + HOLD ? PAUSE_AT : (e - HOLD) / PACE) : 1; el.classList.toggle('welcoming', t < 0);
       if (t < 0) { const n = city(cv, model, w, land); count.textContent = (n || 0).toLocaleString('en-CA'); const vis = ease(w / .12) * (1 - ease((w - .54) / .12)); for (const n of [welcomeBox, countBox]) { n.style.opacity = String(vis); n.style.transform = 'translateY(' + (8 * (1 - ease(w / .14))) + 'px)'; } }
       cv.style.opacity = t < 0 ? String(1 - ease((w - .86) / .14)) : '0';
-      frame(draw, x, t < 0 || (t === 0 && !demo) ? REST : t); sync(); rule.setAttribute('aria-valuenow', String(Math.max(1, Math.min(STEPS, Math.floor(t) + 1)))); };
+      frame(draw, x, t < 0 || (t === 0 && !demo) ? REST : t); sync(); el.querySelectorAll('.il-tick').forEach((b, i) => b.setAttribute('aria-current', String(i === Math.max(0, Math.min(STEPS - 1, Math.floor(t)))))); };
     // the welcome plays once and stops on the sheet; the demo runs only when asked for
     const tick = now => { const dt = Math.min(.1, (now - last) / 1000); last = now; if (playing && !drag && !doc.hidden) { if (t < 0) { const nt = t + dt; if (nt >= 0) { playing = false; set(0); } else set(nt); } else { set(t + dt / BEAT); if (t >= STEPS) { playing = false; sync(); } } } raf = requestAnimationFrame(tick); };
     set(t); if (!still()) { raf = requestAnimationFrame(tick); }
