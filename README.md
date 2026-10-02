@@ -2,8 +2,6 @@
 
 **Live tool:** https://yeony7626.github.io/vancouver-r3-feasibility-study/
 
-![Review step for the example lot, 577 E 8th Av](docs/example-577-e-8th-review.jpg)
-
 ## Purpose
 
 This tool is for architects, developers, or anyone curious about a lot in Vancouver's R3 zones.
