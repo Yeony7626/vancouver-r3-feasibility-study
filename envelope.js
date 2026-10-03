@@ -38,11 +38,16 @@ window.ENV = (function () {
       return 'chamfer';
     });
     for (let i = 0; i < n; i++) if (ytype[i] === 'chamfer') { const p = ytype[(i - 1 + n) % n], q = ytype[(i + 1) % n]; ytype[i] = (p === 'front' || q === 'front') ? 'front' : (p === 'exterior' || q === 'exterior') ? 'exterior' : (p === 'rear' || q === 'rear') ? 'rear' : 'side'; }
+    // A jog: a short edge (under 3 m) between two near-parallel edges, where lots of slightly different depth meet in one
+    // lot line (2555 + 2589 E 12th: a 0.6 m step in the lane line). It takes no yard of its own: set back by the rear yard,
+    // a jog running across the lot would cut the lot lengthwise. The edges either side set the yard.
+    const jog = new Set();
+    for (let i = 0; i < n; i++) { const a = local[i], b = local[(i + 1) % n], p = local[(i - 1 + n) % n], q = local[(i + 2) % n]; if (Math.hypot(b[0] - a[0], b[1] - a[1]) < 3 && dang(bearing(p, a), bearing(b, q)) < Math.PI / 6 && dang(bearing(a, b), bearing(p, a)) > Math.PI / 4) jog.add(i); }
     // convexity
     let concave = false;
     for (let i = 0; i < n; i++) { const p = local[(i - 1 + n) % n], q = local[i], s = local[(i + 1) % n]; const cr = (q[0] - p[0]) * (s[1] - q[1]) - (q[1] - p[1]) * (s[0] - q[0]); const L1 = Math.hypot(q[0] - p[0], q[1] - p[1]), L2 = Math.hypot(s[0] - q[0], s[1] - q[1]); if (cr < -0.15 * L1 * L2 && L1 > 1 && L2 > 1) concave = true; }
     const north = -rot; // angle of true north in local frame: north is +y in UTM
-    return { local, ecls, ytype, sides, front, rot, cx, cy, concave, north, T };
+    return { local, ecls, ytype, jog, sides, front, rot, cx, cy, concave, north, T };
   }
 
   function clipHalf(poly, a, nx, ny, d) { // keep points with (p-a)·n <= -d ; n outward unit normal
@@ -61,7 +66,7 @@ window.ENV = (function () {
   function offsetByEdges(fr, poly, dist) {
     const n = fr.local.length; let out = poly;
     for (let i = 0; i < n; i++) {
-      const a = fr.local[i], b = fr.local[(i + 1) % n], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 0.05) continue;
+      const a = fr.local[i], b = fr.local[(i + 1) % n], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 0.05 || fr.jog?.has(i)) continue;
       const nx = (b[1] - a[1]) / L, ny = -(b[0] - a[0]) / L; // outward for CCW
       const d = dist(i, fr.ytype[i]); if (d == null) continue;
       out = clipHalf(out, a, nx, ny, d); if (out.length < 3) return [];

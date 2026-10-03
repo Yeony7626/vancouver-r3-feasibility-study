@@ -353,6 +353,20 @@ window.UNITS_UI=(function(){'use strict';
 
  // Placement stays empty until Done; editing a generated door reroutes without moving its core.
  function setDoor(i,side,offset){const cores=editableCores(),c=cores[i];if(!c)return;const d=C.door(c,side,offset??(["top","bottom"].includes(side)?c.w:c.h)/2);if(c.doorSide===side&&c.doorOffset===d.offset){draw();return;}cores[i]={...c,doorSide:side,doorOffset:d.offset};const candidate={...o,coreLayout:cores,autoFit:false,stubs:(o.stubs||[]).filter(s=>s.for!==c.id)};if(o.typology==='free'){markUpstream(candidate);}const trial=F.generate({...candidate,geometryOnly:true},last.context),blocking=trial.ok?[]:trial.errors.filter(e=>!softError(e));if(blocking.length){draw();$('u-status').textContent='Door not moved: '+blocking[0];return;}remember();o=candidate;selectedCore=i;change();rev('Door moved to the '+side+' face · corridor flagged for update');}
+ // Background workers for the plan search, started on the first Generate plan and kept for the next: one per processor core
+ // to spare, 2 to 8. Each runs PLAN_SETUP.task on plan-worker.js; a worker that fails is replaced and its job is rejected
+ // (the search then runs that job on this page). None from file:// pages, where workers cannot load.
+ let planPool;
+ function workerPool(){if(planPool!==undefined)return planPool;if(window.location?.protocol==='file:'||typeof Worker==='undefined')return planPool=null;
+  const n=Math.max(2,Math.min(8,(navigator.hardwareConcurrency||4)-1)),idle=[],queue=[],jobs=new Map();let seq=0;
+  const spawn=()=>{let w;try{w=new Worker('plan-worker.js');}catch(e){return null;}
+   w.onmessage=({data})=>{const j=jobs.get(data.id);jobs.delete(data.id);w.job=null;idle.push(w);pump();if(j)data.error?j.reject(new Error(data.error)):j.resolve(data.result);};
+   w.onerror=e=>{e.preventDefault?.();const j=w.job&&jobs.get(w.job);if(j){jobs.delete(w.job);j.reject(new Error(e.message||'worker failed'));}w.terminate();const k=idle.indexOf(w);if(k>=0)idle.splice(k,1);const r=spawn();if(r)idle.push(r);pump();};
+   return w;};
+  const pump=()=>{while(idle.length&&queue.length){const w=idle.shift(),j=queue.shift();w.job=j.id;jobs.set(j.id,j);try{w.postMessage({id:j.id,task:j.task});}catch(e){jobs.delete(j.id);w.job=null;idle.push(w);j.reject(e);}}};
+  for(let i=0;i<n;i++){const w=spawn();if(w)idle.push(w);}
+  if(!idle.length)return planPool=null;
+  return planPool={size:idle.length,run:task=>new Promise((resolve,reject)=>{queue.push({id:++seq,task,resolve,reject});pump();})};}
  function solveNetwork(options,onProgress){
   const local=()=>window.CORRIDOR_NETWORK.routeAsync({...options,onProgress});
   if(window.location?.protocol==='file:'||typeof Worker==='undefined')return local();
@@ -646,7 +660,7 @@ window.UNITS_UI=(function(){'use strict';
  function reveal(){setTimeout(()=>window.DRAWING_MOTION?.play($('u-stage')),40);}
  async function generatePlan(){if(planBusy)return;const snapshot=JSON.stringify(o),setBusy=(t,info)=>{planBusy=t;if(window.PLAN_WAIT)window.PLAN_WAIT.show(t,info,last.context);else busy(t);for(const b of [$('ps-generate'),$('ws-go')])if(b){b.disabled=true;b.textContent='Generating…';}$('u-status').textContent=t.split(' · ')[0];};
   planFailure=null;setBusy('Generating plan…');
-  try{const res=await PS.generate(o,last.context,{solve:q=>q.connectOnly?window.CORRIDOR_NETWORK.routeAsync(q):solveNetwork(q,()=>{}),progress:setBusy});planBusy=null;busy(null);
+  try{const res=await PS.generate(o,last.context,{solve:q=>q.connectOnly?window.CORRIDOR_NETWORK.routeAsync(q):solveNetwork(q,()=>{}),progress:setBusy,pool:workerPool()});planBusy=null;busy(null);
    if(JSON.stringify(o)!==snapshot){draw();notice('The design changed while the plan was generating. Press Generate plan again.');return;}
    if(!res.ok){planFailure={message:res.message,patch:res.patch,label:res.label,study:res.study};briefStep=PS.STEPS.length-1;draw();notice(res.message);return;}
    remember();o=res.o;o.commercial=o.groundUse==='commercial';planAlternatives=res.alternatives||[];editQuiet=true;change();planPick=o.planReport?.label||'';rev(res.tier==='pass'?'Plan generated from the brief':'Plan generated as a study: unresolved checks');window.APP.showTab('units');notice(res.summary,false);reveal();}

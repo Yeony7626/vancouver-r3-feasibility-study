@@ -86,7 +86,7 @@ window.MASS = (function () {
     if (m.ghost) m.ghost.plates.forEach(p => p.poly.forEach(q => pts3.push([q[0], q[1], p.z1])));
     const cx = opts.context; if (cx) { const b = cx.band; pts3.push([b.x0, b.y0, 0], [b.x1, b.y0, 0], [b.x1, b.y1, 0], [b.x0, b.y1, 0]); }
     ob.fit(pts3);
-    const P = p3 => ob.p(p3);
+    const P = p3 => ob.p(p3), streetTags = [];
     // surroundings: street and lane surface, neighbouring parcels, then approximate neighbouring buildings sorted far to near
     const ctxBuilding = bld => { let q = bld.poly; if (D.area(q) < 0) q = q.slice().reverse(); const g = D.el('g', {}, s);
       for (let i = 0; i < q.length; i++) { const a = q[i], b = q[(i + 1) % q.length], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 0.05) continue; if (!ob.faces((b[1] - a[1]) / L, -(b[0] - a[0]) / L)) continue;
@@ -98,7 +98,7 @@ window.MASS = (function () {
       cx.parcels.forEach(q => D.el('polygon', { points: D.pts(q.poly.map(v => P([v[0], v[1], 0]))), fill: '#f7f8f9', stroke: '#d3d6da', 'stroke-width': 0.4 }, s));
       const lc = m.Env.fr.local.reduce((t, v) => [t[0] + v[0] / m.Env.fr.local.length, t[1] + v[1] / m.Env.fr.local.length], [0, 0]);
       (cx.streets || []).forEach(st => { const mid = [(st.a[0] + st.b[0]) / 2, (st.a[1] + st.b[1]) / 2], L = Math.hypot(mid[0] - lc[0], mid[1] - lc[1]) || 1, q = P([mid[0] + (mid[0] - lc[0]) / L * 7, mid[1] + (mid[1] - lc[1]) / L * 7, 0]); const pa = P([st.a[0], st.a[1], 0]), pb = P([st.b[0], st.b[1], 0]); let ang = Math.atan2(pb[1] - pa[1], pb[0] - pa[0]) * 180 / Math.PI; if (ang > 90) ang -= 180; if (ang <= -90) ang += 180; // along the street, kept upright
-        const t = D.text(s, q[0], q[1], st.name, { size: 9, fill: D.INK2, transform: `rotate(${ang.toFixed(1)} ${q[0].toFixed(1)} ${q[1].toFixed(1)})` }); if (t && t.setAttribute) { t.setAttribute('letter-spacing', '.6'); t.setAttribute('stroke', '#dcdfe3'); t.setAttribute('stroke-width', '3'); t.setAttribute('paint-order', 'stroke'); } });
+        const t = D.text(s, q[0], q[1], st.name, { size: 9, fill: D.INK2, transform: `rotate(${ang.toFixed(1)} ${q[0].toFixed(1)} ${q[1].toFixed(1)})` }); if (t && t.setAttribute) { t.setAttribute('letter-spacing', '.6'); t.setAttribute('stroke', '#dcdfe3'); t.setAttribute('stroke-width', '3'); t.setAttribute('paint-order', 'stroke'); streetTags.push(t); } });
       cx.buildings.map(bld => ({ bld, d: depthOf(bld.poly) })).sort((x, y) => x.d - y.d).forEach(({ bld, d }) => { if (d < lotDepth) ctxBuilding(bld); else near.push(bld); }); }
     if (m.ghost) { // untrimmed envelope as a dashed ghost
       const gp = m.ghost.plates, top = gp[gp.length - 1], base = gp[0];
@@ -149,11 +149,24 @@ window.MASS = (function () {
     }
     near.forEach(ctxBuilding);
     if (cx) { const g = D.el('g', {}, s); D.el('rect', { x: 14, y: Hh - 26, width: 10, height: 10, fill: '#e1e4e8', stroke: '#9ea3aa', 'stroke-width': 0.6 }, g); D.text(g, 28, Hh - 17, 'context · approx. existing buildings, streets and lane within ' + cx.radius + ' m', { anchor: 'start', size: 9, fill: D.INK2 }); }
-    // dims: building depth on the near side, height
-    const g0 = m.plates[0].poly; const xMin = Math.min(...g0.map(q => q[0])), yMin = Math.min(...g0.map(q => q[1])), yMax = Math.max(...g0.map(q => q[1]));
-    D.dim(s, P([xMin, yMin, 0]), P([xMin, yMax, 0]), -18, `${fmt(yMax - yMin, 1)} m depth`);
-    const topz = m.plates[m.N - 1].z1+(m.roofAllowance||0); const xMax = Math.max(...g0.map(q => q[0]));
-    D.dim(s, P([xMax, yMin, 0]), P([xMax, yMin, topz]), 18, `${fmt(topz, 1)} m${m.roofNote ? ` + ${fmt(m.roofNote, 1)} m roof` : ""} · ${m.N} storeys`);
+    // dims, chosen on screen so they stay clear of the mass and of each other at any view angle: the depth along the lowest
+    // ground edge that runs front to back, the height up the side corner at the other end of the near face, both set outside
+    const g0 = m.plates[0].poly; const xMin = Math.min(...g0.map(q => q[0])), xMax = Math.max(...g0.map(q => q[0])), yMin = Math.min(...g0.map(q => q[1])), yMax = Math.max(...g0.map(q => q[1]));
+    const topz = m.plates[m.N - 1].z1+(m.roofAllowance||0);
+    const C = [[xMin, yMin], [xMax, yMin], [xMax, yMax], [xMin, yMax]].map(q => ({ q, s: P([q[0], q[1], 0]) })), mid = C.reduce((a, c) => [a[0] + c.s[0] / 4, a[1] + c.s[1] / 4], [0, 0]);
+    const outward = (a, b, off) => { const dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy) || 1; return ((a[0] + b[0]) / 2 - mid[0]) * -dy / L + ((a[1] + b[1]) / 2 - mid[1]) * dx / L >= 0 ? off : -off; };
+    const low = C.reduce((a, c) => c.s[1] > a.s[1] ? c : a), back = C.find(c => c !== low && c.q[0] === low.q[0]), side = C.find(c => c !== low && c.q[1] === low.q[1]);
+    D.dim(s, low.s, back.s, outward(low.s, back.s, 18), `${fmt(yMax - yMin, 1)} m depth`);
+    const up = P([side.q[0], side.q[1], topz]);
+    D.dim(s, side.s, up, outward(side.s, up, 18), `${fmt(topz, 1)} m${m.roofNote ? ` + ${fmt(m.roofNote, 1)} m roof` : ""} · ${m.N} storeys`);
+    // Street names give way to the dimension strings: each slides along its own street until it clears them.
+    { const geo = t => { const fs = +t.getAttribute('font-size') || 9, a = +(((t.getAttribute('transform') || '').match(/rotate\(([-\d.]+)/) || [0, 0])[1]) * Math.PI / 180; return { x: +t.getAttribute('x'), y: +t.getAttribute('y'), c: Math.cos(a), s: Math.sin(a), h: t.textContent.length * fs * .33 + 4, v: fs * .5 + 3, deg: a * 180 / Math.PI }; };
+      const hit = (p, q) => { for (let i = -1; i <= 1.001; i += .1) { const dx = p.x + p.c * p.h * i - q.x, dy = p.y + p.s * p.h * i - q.y; if (Math.abs(dx * q.c + dy * q.s) <= q.h && Math.abs(-dx * q.s + dy * q.c) <= q.v + p.v) return true; } return false; };
+      const dims = [...s.querySelectorAll('g.dim text')].map(geo), clear = g => !dims.some(d => hit(g, d) || hit(d, g));
+      for (const t of streetTags) { const g = geo(t); if (clear(g)) continue;
+        for (const step of [12, -12, 24, -24, 36, -36, 48, -48, 64, -64, 80, -80, 100, -100]) { const q = { ...g, x: g.x + g.c * step, y: g.y + g.s * step };
+          if (Math.abs(q.c) * q.h > Math.min(q.x, W - q.x) || q.y < 40 || q.y > Hh - 30 || !clear(q)) continue;
+          t.setAttribute('x', q.x.toFixed(1)); t.setAttribute('y', q.y.toFixed(1)); t.setAttribute('transform', `rotate(${g.deg.toFixed(1)} ${q.x.toFixed(1)} ${q.y.toFixed(1)})`); break; } } }
     D.title(s, 'Massing', `plan oblique ${Math.round(((rot % 360) + 360) % 360)}° · ${opts.label || ''}${m.fit ? ` · trimmed to permitted area · dashed = envelope` : ''}`);
     return s;
   }

@@ -115,6 +115,7 @@ function apply(o,b,ctx,depth){const x=clone(o);
  // keeping its proportions and staying inside the envelope; without a courtyard it returns to the massing size.
  // (a study saved before the massing plate was recorded starts from its plate, unless a courtyard was already applied)
  const mp=x.massPlate||(!o.court?{W:o.W,D:o.D,court:0}:null);if(mp){x.massPlate=mp;const p=(courtFits(x,b,ctx,depth,COURT_MIN)?courtPlate(x,b,ctx,depth,COURT_MIN):courtPlate(x,b,ctx,depth))||{W:mp.W,D:mp.D};x.W=p.W;x.D=p.D;}
+ if(x.plateFit){x.W=Math.min(x.W,x.plateFit.W);x.D=Math.min(x.D,x.plateFit.D);delete x.plateFit;}
  x.court=depth==null?null:courtRect(x,b,ctx,depth);
  const m=x.moves=x.moves||{};m.recess={...(m.recess||{}),on:b.recess!=='none',d:RECESS[b.recess]||RECESS.shallow,w:m.recess?.w||4,pos:recessPos(b),storeys:1,side:b.recessSide};
  // The entry recess is the lobby's front door: the lobby is steered behind it and opens onto it.
@@ -156,7 +157,7 @@ function problems(o,ctx,b){const out=[],W=o.W,D=o.D,fr=frontages(ctx),ex=exits(o
 const RECESS_POS=['left','middle','right'];
 const recessPos=b=>{const p=b.recessPos||'middle';if(p==='middle')return .5;const left={top:1,bottom:0,left:0,right:1}[b.recessSide]??.5;return p==='left'?left:1-left;};
 const recessCentre=x=>{const r=x.moves?.recess||{},along=r.side==='top'||r.side==='bottom'?x.W:x.D,w=Math.min(r.w||4,along);return (along-w)*(r.pos??.5)+w/2;};
-const SEARCH={refineSteps:[1.2,.6,.3],refineBudget:6,refineCandidates:3,band:.01,minEvaluated:8};
+const SEARCH={refineSteps:[1.2,.6,.3],refineBudget:6,refineCandidates:3,band:.01,minEvaluated:8,quality:{home:.3,studio:1,oversized:1},budget:60000,relaxBudget:20000,leading:6};
 // Mixed use: arrangements that keep the cores behind a commercial strip this deep compete with the rest.
 const SHOP=12;
 // Everything a stacked core must stay clear of: the plate edge, the courtyard, and every storey's cuts.
@@ -485,11 +486,15 @@ const usable=(r,x)=>{const ts=(x.types||[]).filter(t=>t.share>0),average=ts.redu
 // notched room (a stair turned into a corner, study 24), not a strip a room cannot use.
 const step=(p,ps)=>ps.some(q=>q!==p&&(p.h>=p.w?(Math.abs(p.x+p.w-q.x)<.02||Math.abs(q.x+q.w-p.x)<.02)&&Math.min(p.y+p.h,q.y+q.h)-Math.max(p.y,q.y)>=.9*p.h:(Math.abs(p.y+p.h-q.y)<.02||Math.abs(q.y+q.h-p.y)<.02)&&Math.min(p.x+p.w,q.x+q.w)-Math.max(p.x,q.x)>=.9*p.w));
 const slivers=units=>units.reduce((s,u)=>{const ps=u.parts||[u];return s+ps.filter(p=>Math.min(p.w,p.h)<1.2&&!step(p,ps)).reduce((a,p)=>a+p.w*p.h,0);},0);
+// Leftover: plate on the residential floors that no unit, core or corridor takes, drawn hatched red on the plan (pieces of
+// 8 m² or more, as drawn). A plan with leftover is not finished: the corridor or the plate has to change.
+function leftover(r,x){const N=root.CORRIDOR_NETWORK,out=[];if(!N)return out;for(const l of r.levels||[])if(l.level>1&&l.units?.length){try{out.push(...N.analyse(l.g,l.o||x,l.units).unserved.filter(q=>q.area>=8).map(q=>({...q,level:l.level})));}catch(e){}}return out;}
 const awkward=units=>units.reduce((s,u)=>{const ps=u.parts||[u,...(u.patches||[])],x0=Math.min(...ps.map(p=>p.x)),y0=Math.min(...ps.map(p=>p.y)),box=(Math.max(...ps.map(p=>p.x+p.w))-x0)*(Math.max(...ps.map(p=>p.y+p.h))-y0),fill=box?ps.reduce((a,p)=>a+p.w*p.h,0)/box:1;return s+u.net*Math.max(0,1-fill/.6);},0);
 function measure(r,x,cs,ctx){const lv=r.levels||[],gross=lv.reduce((s,l)=>s+(l.ledger?.built||0),0),shop=(r.groundRooms||[]).filter(q=>q.role==='commercial'&&q.on!==false).reduce((s,q)=>s+q.w*q.h,0),odd=awkward(r.allUnits||[]),get=id=>cs.find(c=>c.id===id);
  const paths=lv.flatMap(l=>l.route?.paths||[]),travel=paths.length&&paths.every(p=>Number.isFinite(p.distance))?Math.max(...paths.map(p=>p.distance)):null,ends=lv.filter(l=>l.units?.length).map(l=>deadOf(l,x)),dead=ends.length&&ends.every(Number.isFinite)?Math.max(...ends):null;
  const units=r.allUnits||[],N=units.length,mixDist=N?(x.types||[]).reduce((s,t)=>s+Math.abs(units.filter(u=>u.type===t.key).length/N-t.share/100),0):1,rt=ctx?routes(r,ctx):null,ds=rt?.discharge||[];
- return {ng:gross?(r.net+shop)/gross:0,resNg:gross?r.net/gross:0,score:gross?(usable(r,x)-odd-slivers(r.allUnits||[])+shop)/gross:0,shop,awkward:odd,slivers:slivers(r.allUnits||[]),gross,
+ const left=leftover(r,x).reduce((t,q)=>t+q.area,0),max=k=>(x.types||[]).find(t=>t.key===k)?.max||Infinity;
+ return {left,oversized:(r.allUnits||[]).filter(u=>u.net>max(u.type)*1.15).length,studios:(r.allUnits||[]).filter(u=>u.type==='S').length,ng:gross?(r.net+shop)/gross:0,resNg:gross?r.net/gross:0,score:gross?(usable(r,x)-odd-slivers(r.allUnits||[])+shop)/gross:0,shop,awkward:odd,slivers:slivers(r.allUnits||[]),gross,
   corridor:lv.length?lv.reduce((s,l)=>s+(l.ledger?.corridors||0)+(l.ledger?.galleries||0),0)/lv.length:0,corridorLength:lv.length?lv.reduce((s,l)=>s+(l.g?.corridors||[]).reduce((a,c)=>a+Math.max(c.w,c.h),0),0)/lv.length:0,
   entranceKind:rt?.entrance?rt.entrance.k:2,entranceLen:rt?.entrance?.d??null,dischargeKind:ds.length&&ds.every(Boolean)?Math.max(...ds.map(d=>d.k)):2,dischargeLen:ds.length&&ds.every(Boolean)?ds.reduce((s,d)=>s+d.d,0):null,
   separation:separation(x)?.d??null,sepKey:(()=>{const sp=separation(x);return !sp||sp.d>=Math.max(sp.need,.5*Math.max(x.W,x.D))?Infinity:sp.d;})(),travel,dead,limit:limits(x),within:get('travel')?.status==='pass'&&get('deadEnd')?.status==='pass',mixDist,count:N,tier:tier(cs)};}
@@ -507,22 +512,18 @@ function finishCorridor(input,ctx,result){let x={...input},r=result||F().generat
  x={...x,planReport:currentReport(r,x,ctx),corridorReport:{...rp,extensions:rp.extensions||[],optimized:true,deadEnds:l.route.deadEnds.length,baselineCorridorArea:area(before),baselineUnitArea:before.ledger.net,corridorArea:area(l),unitArea:l.ledger.net,addedCorridorArea:area(l)-area(before),gainedUnitArea:l.ledger.net-before.ledger.net,prunedCorridorArea:area(before)-area(l),...root.CORRIDOR_NETWORK.analyse(l.g,l.o,l.units)}};
  return {x,r};}
 const ORDER={pass:0,study:1,fail:2};
-// Eligibility first (pass, then study, then fail), then a resolved street or lane entrance and stair discharge. Within that, candidates within SEARCH.band of the best usable net-to-gross
-// are compared on exit stairs set further apart (while a pair is closer than half the plate's longer side), then the shorter
-// dead end (by more than 1 m), then access before efficiency: street entrance, then street or lane discharge, then shorter entrance and
-// discharge routes, then the shorter corridor, then the closer unit mix. Outside the band, usable net-to-gross decides.
-function rankAll(fs){const best={},group={};for(const f of fs)best[f.m.tier]=Math.max(best[f.m.tier]??-1,f.m.score);
- const open=f=>f.m.entranceKind===2||f.m.dischargeKind===2?1:0;
- // Around a courtyard the corridor runs along the court with the units on the exterior walls (study 19): that layout is
- // preferred when it comes within a few points of the best and carries more homes than the best-scoring plan (t03: 59
- // against 48); with no more homes, the shorter, more efficient plan wins (study 25).
- const lead={};for(const f of fs)if(f.m.score>=best[f.m.tier]-1e-9)lead[f.m.tier]=f.r?.count||0;
- const ring=f=>f.ring&&f.m.score>=best[f.m.tier]-.06&&(f.r?.count||0)>(lead[f.m.tier]||0)?1:0,gk=f=>f.m.tier+ring(f);for(const f of fs)group[gk(f)]=Math.max(group[gk(f)]??-1,f.m.score);
- const inBand=f=>f.m.score>=group[gk(f)]-SEARCH.band-1e-9,len=f=>(f.m.entranceLen??99)+(f.m.dischargeLen??99);
- // Homes before a few points of efficiency: a plan within 3 points that carries a fifth more homes (3 or more) wins, so a
- // short lobby that merges two quadrants into one oversized home does not beat four homes around the core (s02: 10 against 15).
- const many=(p,q)=>{const a=p.r?.count||0,b=q.r?.count||0;return Math.abs(a-b)>=Math.max(3,.2*Math.max(a,b))&&Math.abs(p.m.score-q.m.score)<=.03?b-a:0;};
- return fs.sort((p,q)=>(ORDER[p.m.tier]-ORDER[q.m.tier])||(open(p)-open(q))||(ring(q)-ring(p))||many(p,q)||(inBand(q)-inBand(p))||(inBand(p)&&inBand(q)?(p.m.sepKey!==q.m.sepKey&&!(Math.abs(q.m.sepKey-p.m.sepKey)<=1)?(q.m.sepKey>p.m.sepKey?1:-1):0)||(Math.abs((p.m.dead??0)-(q.m.dead??0))>1?(p.m.dead??0)-(q.m.dead??0):0)||(Math.abs((q.r?.count||0)-(p.r?.count||0))>=Math.max(2,.05*(p.r?.count||0))?(q.r?.count||0)-(p.r?.count||0):0)||(p.m.entranceKind-q.m.entranceKind)||(p.m.dischargeKind-q.m.dischargeKind)||(len(p)-len(q))||(p.m.corridorLength-q.m.corridorLength)||(p.m.mixDist-q.m.mixDist):0)||(q.m.score-p.m.score));}
+// One fixed order, the same whichever plans are compared (ten sites judged by hand, 2026-10-02: family-sized homes first):
+// eligibility (pass, study, fail); no leftover plate (the red hatch), then less of it; a resolved street or lane entrance and
+// stair discharge; then plan quality in half-point steps: usable net-to-gross in points, less a point for each studio (the
+// brief's studio share is a ceiling, not a target) and for each home over its type's size range, plus 0.3 of a point per home
+// (weights fitted to the ten judged sites by hand, 2026-10-02; 0.4 per home would turn Columbia's 36 three-bedroom homes into
+// 41 smaller ones); then exit stairs set further apart (while a pair is closer than half the plate's
+// longer side), the shorter dead end, a street entrance, street or lane discharge, shorter entrance and discharge routes, the
+// shorter corridor, the closer unit mix; more homes, then the exact efficiency, settle the rest.
+const RANK=[f=>ORDER[f.m.tier],f=>f.m.left>0?1:0,f=>Math.round(f.m.left||0),f=>f.m.entranceKind===2||f.m.dischargeKind===2?1:0,f=>-Math.round(quality(f.m)*2),
+ f=>f.m.sepKey===Infinity?-1e9:-Math.round(f.m.sepKey),f=>Math.round(f.m.dead??0),f=>f.m.entranceKind,f=>f.m.dischargeKind,f=>Math.round((f.m.entranceLen??99)+(f.m.dischargeLen??99)),f=>Math.round(f.m.corridorLength*10),f=>Math.round(f.m.mixDist*100),f=>-(f.m.count||0),f=>-quality(f.m)];
+const quality=m=>m.score*100+SEARCH.quality.home*(m.count||0)-SEARCH.quality.studio*(m.studios||0)-SEARCH.quality.oversized*(m.oversized||0);
+function rankAll(fs){return fs.sort((p,q)=>{for(const k of RANK){const d=k(p)-k(q);if(d)return d;}return 0;});}
 const better=(a,b)=>rankAll([b,a])[0]===a;
 
 // One candidate through the whole pipeline: corridor growth, units on every floor, a ground-floor entrance if needed, dead-end
@@ -562,12 +563,17 @@ async function refine(f,ctx,b,solve,errors,progress,ok){let cur=f,evals=0;const 
 // metres. Only what a line drawing needs; nothing here feeds the search.
 function sketchOf(x,r,corridors){const rr=q=>({x:q.x,y:q.y,w:q.w,h:q.h}),l=r?.levels?.find(v=>v.level>1&&v.units?.length)||r?.levels?.[0],g=l?.g;
  return {W:x.W,D:x.D,built:g?g.built.map(rr):[{x:0,y:0,w:x.W,h:x.D}],voids:(g?g.voids||[]:x.court?[x.court]:[]).map(rr),cores:(g?g.cores:x.coreLayout||[]).map(q=>({...rr(q),kind:q.kind})),corridors:(g?g.corridors:corridors||x.freeCorridors||[]).map(rr),units:(l?.units||[]).flatMap(u=>(u.parts||[u]).map(rr))};}
-async function search(o,ctx,b,{solve,progress=()=>{},keep=KEEP,rounds=3,refineOn=true}={}){const front=F().articulationFront(ctx),cands=[],errors=[];
+async function search(o,ctx,b,{solve,progress=()=>{},keep=KEEP,rounds=3,refineOn=true,pool=null,budget,families}={}){if(pool)return searchAll(o,ctx,b,{pool,progress,refineOn,budget,families});const front=F().articulationFront(ctx),cands=[],errors=[];
  for(const depth of courtDepths(o,b,ctx)){const x=apply(o,b,ctx,depth);for(const s of seeds(x,ctx))cands.push({x:{...x,axis:s.axis,coreLayout:s.cores},line:s.line,network:s.network,ring:s.ring,drawn:s.drawn,label:s.label,family:s.family});}
  if(!cands.length)return {best:null,errors:['No stair and lift position fits clear of the courtyard and every setback.'],tried:0,finals:[]};
- for(const [i,c] of cands.entries()){progress(`Placing stairs and lift · ${i+1} of ${cands.length}`);const loop=c.network||(c.ring?courtRing(c.x):c.drawn?[c.line]:null),res=await solve(loop?{...c.x,freeCorridors:loop,fixedNetwork:true,quick:true,connectOnly:true,articulationFront:front}:{...c.x,quick:true,connectOnly:true,articulationFront:front});if(res.errors?.length){errors.push(res.errors[0]);continue;}progress(`Placing stairs and lift · ${i+1} of ${cands.length}`,{stage:0,sketch:sketchOf(c.x,null,res.corridors)});const plate=c.x.W*c.x.D-(c.x.court?c.x.court.w*c.x.court.h:0);c.screen=(res.report?.unitArea||0)/plate-(res.report?.corridorArea||0)/plate*.01;}
- // The best of each family first, so the shortlist holds genuinely different arrangements; then the rest in screen order.
- const ranked=cands.filter(c=>c.screen!=null).sort((p,q)=>q.screen-p.screen),order=[],used=new Set();
+ for(const [i,c] of cands.entries()){progress(`Placing stairs and lift · ${i+1} of ${cands.length}`);const loop=c.network||(c.ring?courtRing(c.x):c.drawn?[c.line]:null),res=await solve(loop?{...c.x,freeCorridors:loop,fixedNetwork:true,quick:true,connectOnly:true,articulationFront:front}:{...c.x,quick:true,connectOnly:true,articulationFront:front});if(res.errors?.length){errors.push(res.errors[0]);continue;}progress(`Placing stairs and lift · ${i+1} of ${cands.length}`,{stage:0,sketch:sketchOf(c.x,null,res.corridors)});const plate=c.x.W*c.x.D-(c.x.court?c.x.court.w*c.x.court.h:0);c.screen=(res.report?.unitArea||0)/plate-(res.report?.corridorArea||0)/plate*.01;
+  try{const x={...c.x,freeCorridors:res.corridors,corridorReport:res.report,stubs:[],groundCorridors:[],unitsGenerated:true,articulationFront:front},r=F().generate({...x,geometryOnly:false,corridorDraft:false},ctx);if(r.ok&&r.count){const cs=checks(r,x,ctx);c.pre={m:measure(r,x,cs,ctx),r};}}catch(e){}}
+ // Two predictors, interleaved: the solver's estimate of unit area along the grown corridor, and the units actually fitted to
+ // the door-linking corridor, in the plan order. Each alone missed the best plan of a full search on most of ten sites; the
+ // seeds either rates highly are fitted in full.
+ // The best of each family first, so the shortlist holds genuinely different arrangements; then the rest in that order.
+ const byEstimate=cands.filter(c=>c.screen!=null).sort((p,q)=>q.screen-p.screen),byFit=rankAll(cands.filter(c=>c.pre).map(c=>({...c.pre,c}))).map(q=>q.c),ranked=[],order=[],used=new Set();
+ for(let i=0;i<Math.max(byEstimate.length,byFit.length);i++)for(const c of [byEstimate[i],byFit[i]])if(c&&!ranked.includes(c))ranked.push(c);
  // the corridor around a courtyard and the stairs in line at the corridor ends are always tried in the first round
  for(const pick of [ranked.find(c=>c.ring),ranked.find(c=>c.drawn&&!c.family.startsWith('landing')),ranked.find(c=>c.family.startsWith('landing'))])if(pick&&!used.has(pick.family+pick.x.axis)){used.add(pick.family+pick.x.axis);order.push(pick);}
  for(const c of ranked)if(!used.has(c.family+c.x.axis)){used.add(c.family+c.x.axis);order.push(c);}for(const c of ranked)if(!order.includes(c))order.push(c);
@@ -582,6 +588,37 @@ async function search(o,ctx,b,{solve,progress=()=>{},keep=KEEP,rounds=3,refineOn
   for(const f of picks){const t=await refine(f,ctx,b,solve,errors,progress,ok);if(t!==f)finals.push(t);}rankAll(finals);}
  return {best:finals[0]||null,finals,errors,tried:cands.length};}
 
+// With a pool of background workers, every stair-and-lift arrangement is fitted in full, side by side, instead of a shortlist
+// picked by an estimate (a full fit found the plan judged best by hand on 8 of 10 sites; the shortlist on about 4). Workers
+// return the measures without the drawn result; the best arrangement of each of the leading families is then fitted again in
+// full and refined, also side by side. A job whose worker fails runs here instead.
+const candidates=(o,ctx,b)=>{const out=[];for(const depth of courtDepths(o,b,ctx)){const x=apply(o,b,ctx,depth);for(const s of seeds(x,ctx))out.push({x:{...x,axis:s.axis,coreLayout:s.cores},line:s.line,network:s.network,ring:s.ring,drawn:s.drawn,label:s.label,family:s.family});}return out;};
+async function searchAll(o,ctx,b,{pool,progress=()=>{},refineOn=true,budget=SEARCH.budget,families=null}){const cands=candidates(o,ctx,b).filter(c=>!families||families.includes(c.family)),errors=[],finals=[];
+ if(!cands.length)return {best:null,errors:['No stair and lift position fits clear of the courtyard and every setback.'],tried:0,finals:[]};
+ const run=t=>pool.run(t).catch(()=>task(t));let done=0,next=0;
+ // families taken in turn, so a search stopped by the time limit has still tried every kind of arrangement; the limit
+ // applies only once a plan that passes or is a study is in hand (a slow computer never ends a search on failures alone)
+ const fam=new Map();for(const c of cands){if(!fam.has(c.family))fam.set(c.family,[]);fam.get(c.family).push(c);}const order=[];for(let i=0;order.length<cands.length;i++)for(const l of fam.values())if(l[i])order.push(l[i]);
+ const stop=Date.now()+budget;progress(`Fitting every stair and lift arrangement · 0 of ${cands.length}`,{stage:1});
+ const lane=async()=>{while(next<order.length&&(Date.now()<stop||!finals.some(f=>f.m.tier!=='fail'))){const c=order[next++];await run({type:'evaluate',seed:c,ctx,b}).then(res=>{done++;errors.push(...(res.errors||[]));if(res.f)finals.push(res.f);
+  const live=finals.filter(q=>q.m.tier!=='fail'),t=live.length?rankAll(live.slice())[0]:null;
+  progress(`Fitting every stair and lift arrangement · ${done} of ${cands.length}${t?` · best so far ${(t.m.ng*100).toFixed(1)}% net / gross, ${t.m.count} units`:''}`,{stage:1,sketch:res.f?.sketch,best:t?{count:t.m.count,ng:t.m.ng}:null});});}};
+ await Promise.all(Array.from({length:Math.max(1,pool.size||4)},lane));
+ rankAll(finals);if(!finals.length)return {best:null,finals,errors,tried:cands.length,fitted:done};
+ const picks=[],fams=new Set();for(const f of finals)if(!fams.has(f.family)&&picks.length<(refineOn?SEARCH.refineCandidates:1)){fams.add(f.family);picks.push(f);}
+ progress(`Refining the ${picks.length} best arrangement${picks.length===1?'':'s'}`,{stage:2});
+ const full=await Promise.all(picks.map(f=>run({type:refineOn?'refine':'evaluate',seed:{...f.seed,only:f.tag},ctx,b,full:true}).then(res=>(errors.push(...(res.errors||[])),res.f))));
+ const kept=finals.filter(f=>!picks.includes(f)).concat(full.filter(Boolean));rankAll(kept);
+ // the plan offered must carry its drawn result
+ if(kept[0]&&!kept[0].r){const res=await run({type:'evaluate',seed:{...kept[0].seed,only:kept[0].tag},ctx,b,full:true});if(res.f)kept[0]=res.f;}
+ return {best:kept[0]||null,finals:kept,errors,tried:cands.length,fitted:done};}
+// One job for a worker (or for this page when there is none): fit one arrangement, or fit and refine it. Measures only unless
+// the full result is asked for.
+async function task(t){const solve=q=>Promise.resolve(root.CORRIDOR_NETWORK.route(q)),errors=[];
+ const f=await evaluate(t.seed,t.ctx,t.b,solve,errors);if(!f)return {f:null,errors};
+ if(t.type==='refine'){const r=await refine(f,t.ctx,t.b,solve,errors,()=>{},blockers(f.seed.x,t.ctx));return {f:r,errors};}
+ return {f:t.full?f:{o:f.o,checks:f.checks,m:f.m,label:f.label,tag:f.tag,family:f.family,seed:f.seed,ring:f.ring,sketch:sketchOf(f.o,f.r)},errors};}
+
 // Briefs one step simpler than the chosen one, in the order a designer would give things up.
 function relaxations(b){const out=[];
  for(const d of SETBACKS.filter(d=>d<b.setback).reverse())out.push({patch:{setback:d},label:`a ${d} m setback`});if(b.setback>0)out.push({patch:{setback:0},label:'no upper-floor setback'});
@@ -591,20 +628,34 @@ function relaxations(b){const out=[];
  return out;}
 function plainError(e){if(!e)return 'No arrangement of stairs, lift and corridor fits this brief.';if(/No continuous .* corridor reaches every core door/.test(e))return 'No continuous corridor can reach both stairs and the lift with this brief.';if(/setback/i.test(e))return 'A setback cuts through every workable stair and lift position.';if(/courtyard/i.test(e))return 'The courtyard leaves no workable position for the stairs, lift and corridor.';if(/no connected route to a stair|reach all required stair/i.test(e))return 'Some units cannot reach both exit stairs through the corridor.';return e;}
 const failText=cs=>cs.filter(c=>c.status==='fail'&&c.category!=='report').map(c=>c.message).join(' ');
-const summary=(m,r,res)=>`${m.tier==='pass'?'Plan generated':'Plan generated as a study'}: ${r.count} units${m.shop?` + ${fmt(m.shop,0)} m² commercial`:''} · ${fmt(m.ng*100)}% net / gross${m.shop?` (residential ${fmt(m.resNg*100)}%)`:''} · ${fmt(m.corridorLength,1)} m corridor per floor · longest exit route ${m.travel==null?'unresolved':fmt(m.travel)+' m'} (limit ${m.limit.travel} m). Best of ${res.tried} stair and lift arrangements.`;
+const summary=(m,r,res)=>`${m.tier==='pass'?'Plan generated':'Plan generated as a study'}: ${r.count} units${m.shop?` + ${fmt(m.shop,0)} m² commercial`:''} · ${fmt(m.ng*100)}% net / gross${m.shop?` (residential ${fmt(m.resNg*100)}%)`:''} · ${fmt(m.corridorLength,1)} m corridor per floor · longest exit route ${m.travel==null?'unresolved':fmt(m.travel)+' m'} (limit ${m.limit.travel} m). ${res.fitted!=null&&res.fitted<res.tried?`Best of ${res.fitted} of ${res.tried} stair and lift arrangements, as many as the time limit allowed.`:`Best of ${res.tried} stair and lift arrangements.`}`;
 
-async function generate(o,ctx,{solve,progress}={}){const b=o.brief,block=problems(o,ctx,b).filter(p=>p.level==='block');
+// One exit stair serves at most 4 homes a floor above the third storey (6 on storeys 1–3, VBBL 2025 3.2.10). On a long plate no
+// corridor may reach past them, so the rest is left over. The plate is shortened by the leftover that spans the whole plate at
+// either end, and the search runs again: the building becomes the size one stair can serve, and the summary says so.
+function plateTrim(f){const x=f.o,W=x.W,D=x.D,E=.05,all=leftover(f.r,x),lv=Math.min(...all.map(v=>v.level)),reg=all.filter(q=>q.level===lv),sum=(rs,k)=>rs.reduce((t,q)=>t+q[k],0);
+ const west=reg.filter(q=>q.x<E),east=reg.filter(q=>q.x+q.w>W-E),north=reg.filter(q=>q.y<E),south=reg.filter(q=>q.y+q.h>D-E);
+ const cut={w:sum(west,'h')>=.6*D?Math.min(...west.map(q=>q.x+q.w)):0,e:sum(east,'h')>=.6*D?W-Math.max(...east.map(q=>q.x)):0,n:sum(north,'w')>=.6*W?Math.min(...north.map(q=>q.y+q.h)):0,s:sum(south,'w')>=.6*W?D-Math.max(...south.map(q=>q.y)):0};
+ const w=W-cut.w-cut.e,d=D-cut.n-cut.s;return (w<W-.5||d<D-.5)&&w>=8&&d>=8?{W:+w.toFixed(2),D:+d.toFixed(2)}:null;}
+async function generate(o,ctx,{solve,progress,pool}={}){o={...o};delete o.plateFit;const b=o.brief,block=problems(o,ctx,b).filter(p=>p.level==='block');
  if(block.length)return {ok:false,message:block[0].text,patch:block[0].patch,label:block[0].label};
- const res=await search(o,ctx,b,{solve,progress}),best=res.best,pack=f=>({...f.o,planReport:{...f.m,checks:f.checks,tried:res.tried,label:f.label}});
+ let res=await search(o,ctx,b,{solve,progress,pool});
+ if(b.stairs==='one')for(let k=0;k<2;k++){const cur=res.best;if(!cur||!(cur.m.left>0))break;const t=plateTrim(cur);if(!t)break;const se=root.RULES?.VBBL?.singleExit||{unitsHigh:4};
+  progress?.(`One exit stair serves ${se.unitsHigh} homes a floor · fitting the plate to ${fmt(t.W)} × ${fmt(t.D)} m`);
+  const lead=[];for(const q of res.finals||[])if(!lead.includes(q.family)&&lead.length<SEARCH.leading)lead.push(q.family);
+  const next=await search({...o,plateFit:t},ctx,b,{solve,progress,pool,families:lead});if(!next.best||ORDER[next.best.m.tier]>ORDER[cur.m.tier]||next.best.m.left>=cur.m.left)break;
+  if(next.fitted!=null)next.fitted+=res.fitted??res.tried;next.tried+=res.tried;next.trim={from:res.trim?.from||{W:cur.o.W,D:cur.o.D},to:{W:next.best.o.W,D:next.best.o.D}};res=next;}
+ const best=res.best,pack=f=>({...f.o,planReport:{...f.m,checks:f.checks,tried:res.tried,label:f.label}});
  if(best&&best.m.tier!=='fail'){const open=best.checks.filter(c=>c.category!=='report'&&c.status!=='pass').map(c=>c.message);
   // the next best layouts from other families, for the user to compare and switch to: only genuine near-equals (same tier,
   // within 3 points of net-to-gross, at most one unit fewer, no more awkward area), never a weaker plan offered as a choice
-  const near=f=>f.m.tier===best.m.tier&&f.m.ng>=best.m.ng-.03&&f.r.count>=best.r.count-1&&(f.m.awkward||0)<=(best.m.awkward||0)+5&&(f.m.slivers||0)<=(best.m.slivers||0);
-  const seen=new Set([best.family]),alternatives=[];for(const f of rankAll(res.finals.filter(f=>f.m.tier!=='fail').slice())){if(alternatives.length>=2)break;if(seen.has(f.family)||!near(f))continue;seen.add(f.family);alternatives.push({o:pack(f),label:f.label,tier:f.m.tier,ng:f.m.ng,count:f.r.count,corridor:f.m.corridorLength});}
-  return {ok:true,tier:best.m.tier,checks:best.checks,alternatives,o:pack(best),r:best.r,summary:summary(best.m,best.r,res)+(open.length?' Unresolved: '+open.join(' '):'')};}
+  const near=f=>f.m.tier===best.m.tier&&(f.m.left||0)<=(best.m.left||0)&&(f.m.oversized||0)<=(best.m.oversized||0)&&(f.m.studios||0)<=(best.m.studios||0)&&f.m.ng>=best.m.ng-.03&&f.m.count>=best.m.count-1&&(f.m.awkward||0)<=(best.m.awkward||0)+5&&(f.m.slivers||0)<=(best.m.slivers||0);
+  const seen=new Set([best.family]),alternatives=[];for(const f of rankAll(res.finals.filter(f=>f.m.tier!=='fail').slice())){if(alternatives.length>=2)break;if(seen.has(f.family)||!near(f))continue;seen.add(f.family);alternatives.push({o:pack(f),label:f.label,tier:f.m.tier,ng:f.m.ng,count:f.m.count,corridor:f.m.corridorLength});}
+  const se=root.RULES?.VBBL?.singleExit||{unitsLow:6,unitsHigh:4},fit=res.trim?` Plate fitted to one exit stair: ${fmt(res.trim.from.W)} × ${fmt(res.trim.from.D)} m shortened to ${fmt(res.trim.to.W)} × ${fmt(res.trim.to.D)} m, since one stair serves at most ${se.unitsHigh} homes a floor above the third storey (VBBL 2025 3.2.10) and no corridor can reach the rest. The full plate needs two exit stairs.`:'',left=best.m.left>0?` ${fmt(best.m.left,0)} m² of plate is left without a unit or corridor across the residential floors.`:'';
+  return {ok:true,tier:best.m.tier,checks:best.checks,alternatives,o:pack(best),r:best.r,trim:res.trim||null,summary:summary(best.m,best.r,res)+fit+left+(open.length?' Unresolved: '+open.join(' '):'')};}
  // Nothing passed: no plan is applied. The best failing layout is offered as a diagnostic study, with a simpler brief that works.
  const study=best?{o:{...pack(best),planStudy:true},r:best.r,checks:best.checks}:null,why=best?`No layout found in this search passes: ${failText(best.checks)}`:plainError(res.errors[0]);
- for(const step of relaxations(b)){progress?.(`Nothing passes yet · trying ${step.label}`);const r=await search(o,ctx,{...b,...step.patch},{solve,progress:()=>{},keep:1,rounds:2});if(r.best&&r.best.m.tier!=='fail')return {ok:false,message:`${why} With ${step.label} it works.`,patch:step.patch,label:step.label,study};}
+ for(const step of relaxations(b)){progress?.(`Nothing passes yet · trying ${step.label}`);const r=await search(o,ctx,{...b,...step.patch},{solve,progress:()=>{},keep:1,rounds:2,pool,budget:SEARCH.relaxBudget,refineOn:false});if(r.best&&r.best.m.tier!=='fail')return {ok:false,message:`${why} With ${step.label} it works.`,patch:step.patch,label:step.label,study};}
  return {ok:false,message:why+' No simpler brief found in this search passes either.',study};}
 
 // ---------- Wizard: one question at a time in the centre; the brief and previews sit at the side ----------
@@ -647,5 +698,5 @@ function wizard(o,ctx,I,state={}){const b=o.brief,fr=frontages(ctx),ex=exits(o,c
 // Side panel: the brief so far; each line jumps back to its question, × clears it.
 function side(o,ctx,I){const b=o.brief;return `<section><h3>Design brief</h3><ol class="ps-brief">${lines(b,ctx,defaults(ctx,I,o),o).map(l=>`<li><button class="ps-link" data-brief-step="${stepOf(l.key)}">${esc(l.text)}</button>${l.changed?`<button data-brief-clear="${l.key}" aria-label="Clear: ${esc(l.text)}" title="Clear">×</button>`:''}</li>`).join('')}</ol><div class="ws-tools"><button data-brief-clear="all">Clear all</button></div></section>`;}
 
-root.PLAN_SETUP={layoutFor,centralSeeds,courtLanding,landingSeeds,finishCorridor,currentReport,ringSeeds,courtRing,flush,RECESS_POS,recessPos,SEARCH,routes,openings,addEntrance,rankAll,refine,entranceSeeds,lineSeeds,checks,tier,quota,repairMix,trimDeadEnds,courtSize,defaults,programme,pick,pickCourt,clear,lines,exits,problems,apply,seeds,search,generate,wizard,side,STEPS,compass,frontages,limits,measure,COURT_MIN,WELL_MIN,RECESS,SETBACKS};
+root.PLAN_SETUP={task,searchAll,layoutFor,centralSeeds,courtLanding,landingSeeds,finishCorridor,currentReport,ringSeeds,courtRing,flush,RECESS_POS,recessPos,SEARCH,routes,openings,addEntrance,rankAll,refine,entranceSeeds,lineSeeds,checks,tier,quota,repairMix,trimDeadEnds,courtSize,defaults,programme,pick,pickCourt,clear,lines,exits,problems,apply,seeds,search,generate,wizard,side,STEPS,compass,frontages,limits,measure,COURT_MIN,WELL_MIN,RECESS,SETBACKS};
 })(typeof window!=='undefined'?window:globalThis);
